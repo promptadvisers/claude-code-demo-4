@@ -1,15 +1,23 @@
-// Configuration
-const API_KEY = 'your-openai-api-key-here'; // Replace with your OpenAI API key
-const API_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
-
-// Claude 4 Sonnet Configuration
-const ANTHROPIC_API_KEY = 'your-anthropic-api-key-here'; // Replace with your Anthropic API key
+// Configuration  
+const API_ENDPOINT = 'https://api.openai.com/v1/responses';
 const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 
-// Initialize Mermaid
+// Function to get API keys from configuration
+async function getApiKey(service) {
+    try {
+        return await window.AppConfig.getApiKey(service);
+    } catch (error) {
+        throw new Error(`API Configuration Error: ${error.message}`);
+    }
+}
+
+// Initialize Mermaid with error suppression
 mermaid.initialize({ 
-    startOnLoad: true,
+    startOnLoad: false, // Disable automatic rendering to prevent external errors
     theme: 'default',
+    suppressErrorRendering: true, // Suppress external error displays
+    htmlLabels: true,
+    securityLevel: 'loose', // Allow more flexible rendering
     themeVariables: {
         primaryColor: '#2563eb',
         primaryTextColor: '#fff',
@@ -17,7 +25,53 @@ mermaid.initialize({
         lineColor: '#fb923c',
         secondaryColor: '#fb923c',
         tertiaryColor: '#fbbf24'
+    },
+    // Suppress console errors and external error displays
+    logLevel: 'error',
+    errorCallback: function(error) {
+        // Suppress Mermaid's built-in error display
+        console.log('🔇 Mermaid error suppressed:', error.message);
+        return false; // Prevent default error handling
     }
+});
+
+// Observer to remove any external Mermaid error displays
+const errorObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+                // Check if the added element is a Mermaid error
+                if (node.textContent && 
+                    (node.textContent.includes('Syntax error') || 
+                     node.textContent.includes('mermaid version') ||
+                     node.textContent.includes('Parse error'))) {
+                    
+                    // Hide the error element if it's outside our chat container
+                    const isInsideChat = node.closest('.chat-messages') || node.closest('.message');
+                    if (!isInsideChat) {
+                        console.log('🚫 Removing external Mermaid error display');
+                        node.style.display = 'none';
+                        node.style.visibility = 'hidden';
+                        node.style.position = 'absolute';
+                        node.style.left = '-9999px';
+                        node.style.top = '-9999px';
+                        // Also try to remove it completely
+                        setTimeout(() => {
+                            if (node.parentNode) {
+                                node.parentNode.removeChild(node);
+                            }
+                        }, 100);
+                    }
+                }
+            }
+        });
+    });
+});
+
+// Start observing the entire document for error elements
+errorObserver.observe(document.body, {
+    childList: true,
+    subtree: true
 });
 
 // Playful loading messages
@@ -85,6 +139,38 @@ chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handleChatSubmit();
+    }
+});
+
+// Global ESC key listener to stop voice recording
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && isRecording && recognition) {
+        e.preventDefault();
+        console.log('🛑 ESC pressed - stopping voice recording without sending');
+        
+        // Stop recording but don't auto-send
+        recognition.stop();
+        const currentInputElement = userInput.style.display !== 'none' ? userInput : chatInput;
+        const currentVoiceButton = userInput.style.display !== 'none' ? voiceBtn : chatVoiceBtn;
+        
+        setRecordingState(false, currentVoiceButton, currentInputElement);
+        recognition = null;
+        
+        // Show feedback to user
+        const feedbackMsg = document.createElement('div');
+        feedbackMsg.textContent = '⏹️ Recording stopped - you can now edit your text';
+        feedbackMsg.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #2563eb; color: white; padding: 10px 15px; border-radius: 8px; font-size: 14px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.15);';
+        document.body.appendChild(feedbackMsg);
+        
+        // Remove feedback after 3 seconds
+        setTimeout(() => {
+            if (feedbackMsg.parentNode) {
+                feedbackMsg.parentNode.removeChild(feedbackMsg);
+            }
+        }, 3000);
+        
+        // Focus the input for editing
+        currentInputElement.focus();
     }
 });
 
@@ -181,6 +267,14 @@ function addMessage(role, content, isDiagram = false, messageId = null) {
         containerDiv.className = 'mermaid-container';
         containerDiv.id = 'diagram-' + Date.now();
         
+        // Show loading state initially
+        containerDiv.innerHTML = `
+            <div class="diagram-loading">
+                <p><strong>📊 Generating diagram...</strong></p>
+                <div class="error-spinner"></div>
+            </div>
+        `;
+        
         // Try to render the diagram with error handling
         renderMermaidDiagram(content, containerDiv).then((renderResult) => {
             if (renderResult.success) {
@@ -188,8 +282,23 @@ function addMessage(role, content, isDiagram = false, messageId = null) {
                 // Make it clickable only if successful
                 containerDiv.addEventListener('click', () => openDiagramModal(content));
             } else {
-                // Handle diagram error
-                handleDiagramError(content, containerDiv, renderResult.error);
+                // Transition to auto-healing state with clear feedback
+                console.log('🔧 Diagram rendering failed, starting auto-heal:', renderResult.error);
+                
+                // Update loading state to show auto-healing in progress
+                containerDiv.innerHTML = `
+                    <div class="diagram-loading">
+                        <p><strong>🔧 Diagram needs fixing...</strong></p>
+                        <p>AI is automatically correcting the syntax</p>
+                        <div class="error-spinner"></div>
+                        <p class="progress-text">This usually takes 2-3 seconds</p>
+                    </div>
+                `;
+                
+                // Small delay to ensure user sees the transition
+                setTimeout(() => {
+                    handleDiagramError(content, containerDiv, renderResult.error);
+                }, 800);
             }
         });
         
@@ -198,8 +307,20 @@ function addMessage(role, content, isDiagram = false, messageId = null) {
     } else {
         contentDiv.className = 'message-content';
         // Parse markdown to HTML
-        const htmlContent = marked.parse(content);
-        contentDiv.innerHTML = htmlContent;
+        if (typeof marked === 'undefined') {
+            console.error('❌ Marked.js library not loaded!');
+            contentDiv.innerHTML = content; // Fallback to plain text
+        } else {
+            const htmlContent = marked.parse(content);
+            console.log('🎨 Markdown parsing:', {
+                originalLength: content.length,
+                htmlLength: htmlContent.length,
+                containsBold: htmlContent.includes('<strong>'),
+                containsMarkdownBold: content.includes('**'),
+                sampleHTML: htmlContent.substring(0, 200) + '...'
+            });
+            contentDiv.innerHTML = htmlContent;
+        }
         
         messageDiv.appendChild(labelDiv);
         messageDiv.appendChild(contentDiv);
@@ -216,34 +337,39 @@ function addMessage(role, content, isDiagram = false, messageId = null) {
 }
 
 // Render Mermaid diagram with error handling
-function renderMermaidDiagram(content, containerDiv) {
+async function renderMermaidDiagram(content, containerDiv) {
     try {
-        const mermaidDiv = document.createElement('div');
-        mermaidDiv.className = 'mermaid';
-        mermaidDiv.textContent = content;
-        containerDiv.appendChild(mermaidDiv);
+        console.log('🎯 Attempting to render Mermaid diagram:', content.substring(0, 50) + '...');
         
-        // Attempt to parse and render with error handling
-        return new Promise((resolve) => {
-            try {
-                mermaid.init(undefined, mermaidDiv).then(() => {
-                    // Check if rendering was successful
-                    const svgElement = mermaidDiv.querySelector('svg');
-                    if (!svgElement) {
-                        resolve({ success: false, error: 'Diagram rendering failed - no SVG generated' });
-                    } else {
-                        resolve({ success: true });
-                    }
-                }).catch((error) => {
-                    resolve({ success: false, error: error.message || 'Mermaid syntax error' });
-                });
-            } catch (syncError) {
-                resolve({ success: false, error: syncError.message || 'Mermaid parsing error' });
+        // Create unique ID for this diagram
+        const diagramId = 'mermaid-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        
+        // Clear container
+        containerDiv.innerHTML = '';
+        
+        try {
+            // Use modern Mermaid API (v10+)
+            const { svg, bindFunctions } = await mermaid.render(diagramId, content);
+            
+            // Insert the rendered SVG
+            containerDiv.innerHTML = svg;
+            
+            // Bind any interactive functions if they exist
+            if (bindFunctions) {
+                bindFunctions(containerDiv);
             }
-        });
+            
+            console.log('✅ Mermaid diagram rendered successfully');
+            return { success: true };
+            
+        } catch (renderError) {
+            console.error('❌ Mermaid render error:', renderError);
+            return { success: false, error: renderError.message || 'Diagram syntax error' };
+        }
+        
     } catch (error) {
-        console.error('Mermaid rendering error:', error);
-        return Promise.resolve({ success: false, error: error.message });
+        console.error('❌ Mermaid setup error:', error);
+        return { success: false, error: error.message || 'Failed to create diagram element' };
     }
 }
 
@@ -302,26 +428,51 @@ Common fixes:
 Return ONLY the fixed Mermaid code without any explanation or markdown fences.`;
 
     try {
+        const apiKey = await getApiKey('OPENAI');
+        
+        const requestBody = {
+            model: 'gpt-5-nano-2025-08-07',
+            input: 'You are a Mermaid diagram syntax expert. Fix syntax errors and return only valid Mermaid code.\n\n' + fixPrompt,
+            max_output_tokens: 8000,
+            text: { verbosity: "low" }
+        };
+        
+        console.log('🔧 Mermaid Diagram Fix Request:', {
+            endpoint: API_ENDPOINT,
+            model: requestBody.model,
+            retryAttempt: diagramRetryCount,
+            maxRetries: MAX_DIAGRAM_RETRIES,
+            errorMessage: errorMessage,
+            diagramLength: brokenDiagram.length
+        });
+        
         const response = await fetch(API_ENDPOINT, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${API_KEY}`
+                'Authorization': `Bearer ${apiKey}`
             },
-            body: JSON.stringify({
-                model: 'gpt-4o-mini',
-                messages: [
-                    { role: 'system', content: 'You are a Mermaid diagram syntax expert. Fix syntax errors and return only valid Mermaid code.' },
-                    { role: 'user', content: fixPrompt }
-                ],
-                temperature: 0.3,
-                max_tokens: 1000
-            })
+            body: JSON.stringify(requestBody)
         });
+        
+        console.log('📡 Mermaid Fix API Response Status:', response.status, response.statusText);
         
         if (response.ok) {
             const data = await response.json();
-            let fixedDiagram = data.choices[0].message.content;
+            console.log('📋 Mermaid Fix API Response:', {
+                outputItems: data.output?.length || 0,
+                responseStructure: data.output?.map(item => item.type) || 'No output array'
+            });
+            
+            // Extract text from GPT-5 Nano response structure
+            let fixedDiagram = '';
+            if (data.output && data.output.length > 0) {
+                const messageOutput = data.output.find(item => item.type === 'message');
+                if (messageOutput && messageOutput.content && messageOutput.content.length > 0) {
+                    const textContent = messageOutput.content.find(content => content.type === 'output_text');
+                    fixedDiagram = textContent ? textContent.text : '';
+                }
+            }
             
             // Clean up the response (remove markdown fences if present)
             fixedDiagram = fixedDiagram.replace(/```mermaid\n?/g, '').replace(/```\n?/g, '').trim();
@@ -337,10 +488,13 @@ Return ONLY the fixed Mermaid code without any explanation or markdown fences.`;
                     containerDiv.addEventListener('click', () => openDiagramModal(fixedDiagram));
                     diagramRetryCount = 0; // Reset counter
                     
+                    console.log('✅ Mermaid diagram auto-healing succeeded on attempt:', diagramRetryCount);
+                    
                     // Add success message
                     addMessage('assistant', '✅ Diagram syntax has been automatically corrected and is now displaying properly.');
                 } else {
                     // Still broken, try again or show final error
+                    console.log('❌ Mermaid diagram auto-healing failed, trying again:', renderResult.error);
                     handleDiagramError(fixedDiagram, containerDiv, renderResult.error);
                 }
             });
@@ -501,31 +655,76 @@ async function processUserInput(input) {
         ];
         
         // Make API call
+        const apiKey = await getApiKey('OPENAI');
+        console.log('🔑 OpenAI API Key loaded:', {
+            prefix: apiKey.substring(0, 12) + '...',
+            length: apiKey.length,
+            format: apiKey.startsWith('sk-proj-') ? 'Project Key' : apiKey.startsWith('sk-') ? 'Standard Key' : 'Unknown Format'
+        });
+        
+        const requestBody = {
+            model: 'gpt-5-nano-2025-08-07',
+            input: systemPrompt + '\n\n' + conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n\n'),
+            max_output_tokens: 15000,
+            text: { verbosity: "medium" }
+        };
+        
+        console.log('🚀 GPT-5 Nano API Request:', {
+            endpoint: API_ENDPOINT,
+            model: requestBody.model,
+            inputLength: requestBody.input.length,
+            maxTokens: requestBody.max_output_tokens,
+            conversationLength: conversationHistory.length
+        });
+        
         const response = await fetch(API_ENDPOINT, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${API_KEY}`
+                'Authorization': `Bearer ${apiKey}`
             },
-            body: JSON.stringify({
-                model: 'gpt-4o-mini',
-                messages: messages,
-                temperature: 0.7,
-                max_tokens: 5000
-            })
+            body: JSON.stringify(requestBody)
         });
         
+        console.log('📡 GPT-5 Nano API Response Status:', response.status, response.statusText);
+        
         if (!response.ok) {
-            throw new Error(`API request failed: ${response.status}`);
+            const errorText = await response.text();
+            console.error('❌ OpenAI API Error:', errorText);
+            throw new Error(`API request failed: ${response.status} - ${errorText}`);
         }
         
         const data = await response.json();
-        const assistantResponse = data.choices[0].message.content;
+        console.log('📋 GPT-5 Nano API Response Data:', {
+            outputItems: data.output?.length || 0,
+            responseStructure: data.output?.map(item => item.type) || 'No output array'
+        });
+        
+        // GPT-5 Nano response structure - extract text from output array
+        let assistantResponse = '';
+        if (data.output && data.output.length > 0) {
+            // Find the message output (not reasoning)
+            const messageOutput = data.output.find(item => item.type === 'message');
+            if (messageOutput && messageOutput.content && messageOutput.content.length > 0) {
+                // Get the text from the first content item
+                const textContent = messageOutput.content.find(content => content.type === 'output_text');
+                assistantResponse = textContent ? textContent.text : '';
+            }
+        }
         
         // Add assistant response to history
         conversationHistory.push({ role: 'assistant', content: assistantResponse });
         
+        // Debug the response content for markdown formatting
+        console.log('📝 Assistant Response Analysis:', {
+            length: assistantResponse.length,
+            hasBoldMarkdown: assistantResponse.includes('**'),
+            boldCount: (assistantResponse.match(/\*\*/g) || []).length,
+            sample: assistantResponse.substring(0, 300) + '...'
+        });
+        
         // Check if response contains a Mermaid diagram
+        console.log('Checking for Mermaid in response:', assistantResponse.substring(0, 200) + '...');
         const mermaidMatch = assistantResponse.match(/```mermaid\n([\s\S]*?)```/);
         
         if (mermaidMatch) {
@@ -575,7 +774,15 @@ async function processUserInput(input) {
         
     } catch (error) {
         console.error('Error:', error);
-        addMessage('assistant', `Sorry, I encountered an error: ${error.message}. Please try again.`);
+        let errorMessage = `Sorry, I encountered an error: ${error.message}`;
+        
+        if (error.message.includes('API Configuration Error')) {
+            errorMessage += ' Please check your .env file and make sure your API keys are properly configured.';
+        } else {
+            errorMessage += ' Please try again.';
+        }
+        
+        addMessage('assistant', errorMessage);
     } finally {
         showLoading(false);
     }
@@ -595,27 +802,34 @@ Write as "I" speaking directly to "you" - be conversational, educational, and co
 Example tone: "I designed this workflow to start with X because... I chose to use a Switch node here instead of IF nodes because... I placed the error handling at this point because..."`;
 
     try {
+        const apiKey = await getApiKey('OPENAI');
         const response = await fetch(API_ENDPOINT, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${API_KEY}`
+                'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
-                model: 'gpt-4o-mini',
-                messages: [
-                    { role: 'system', content: 'You are a workflow automation expert speaking directly to a user. Use first person (I) and explain your design decisions confidently and personally.' },
-                    ...conversationHistory.slice(-5),
-                    { role: 'user', content: explanationPrompt }
-                ],
-                temperature: 0.8,
-                max_tokens: 500
+                model: 'gpt-5-nano-2025-08-07',
+                input: 'You are a workflow automation expert speaking directly to a user. Use first person (I) and explain your design decisions confidently and personally.\n\n' + 
+                       conversationHistory.slice(-5).map(msg => `${msg.role}: ${msg.content}`).join('\n\n') + '\n\n' + explanationPrompt,
+                max_output_tokens: 3000,
+                text: { verbosity: "medium" }
             })
         });
         
         if (response.ok) {
             const data = await response.json();
-            const explanation = data.choices[0].message.content;
+            
+            // Extract text from GPT-5 Nano response structure  
+            let explanation = '';
+            if (data.output && data.output.length > 0) {
+                const messageOutput = data.output.find(item => item.type === 'message');
+                if (messageOutput && messageOutput.content && messageOutput.content.length > 0) {
+                    const textContent = messageOutput.content.find(content => content.type === 'output_text');
+                    explanation = textContent ? textContent.text : '';
+                }
+            }
             
             // Add explanation as a separate message
             addMessage('assistant', `💡 **My design rationale for this workflow:**\n\n${explanation}`);
@@ -787,32 +1001,47 @@ Create a functional n8n workflow JSON that:
 Return ONLY the JSON, no other text or formatting.`;
 
     try {
-        const response = await fetch(ANTHROPIC_ENDPOINT, {
+        const apiKey = await getApiKey('ANTHROPIC');
+        
+        // Use local proxy endpoint for Claude API
+        const proxyEndpoint = '/api/claude-proxy';
+        
+        const requestBody = {
+            system: systemPrompt,
+            userPrompt: userPrompt,
+            anthropicApiKey: apiKey
+        };
+        
+        console.log('🚀 Claude Sonnet 4 API Request:', {
+            endpoint: proxyEndpoint,
+            model: 'claude-sonnet-4-20250514',
+            systemPromptLength: systemPrompt.length,
+            userPromptLength: userPrompt.length,
+            retryAttempt: retryCount + 1
+        });
+        
+        const response = await fetch(proxyEndpoint, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${ANTHROPIC_API_KEY}`,
-                'anthropic-version': '2023-06-01'
+                'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                model: 'claude-sonnet-4-20250514',
-                max_tokens: 64000,
-                system: systemPrompt,
-                messages: [
-                    {
-                        role: 'user',
-                        content: userPrompt
-                    }
-                ],
-                temperature: 0.1
-            })
+            body: JSON.stringify(requestBody)
         });
 
+        console.log('📡 Claude Sonnet 4 API Response Status:', response.status, response.statusText);
+
         if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Claude API Error:', errorText);
             throw new Error(`Anthropic API request failed: ${response.status} ${response.statusText}`);
         }
 
         const data = await response.json();
+        console.log('📋 Claude Sonnet 4 API Response Data:', {
+            contentItems: data.content?.length || 0,
+            responseLength: data.content?.[0]?.text?.length || 0
+        });
+        
         let jsonContent = data.content[0].text;
 
         // Clean up the response - remove any markdown formatting
@@ -992,9 +1221,26 @@ function handleVoiceInput(inputElement, submitHandler) {
         setTimeout(() => {
             const currentInput = inputElement.value.trim();
             console.log('Stopping recording. Current input:', currentInput);
-            if (currentInput.trim()) {
-                // Auto-submit the form
-                submitHandler();
+            
+            // Show feedback that recording stopped and give user control
+            const feedbackMsg = document.createElement('div');
+            feedbackMsg.textContent = '⏹️ Recording stopped - review your text and press Enter to send';
+            feedbackMsg.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #16a34a; color: white; padding: 10px 15px; border-radius: 8px; font-size: 14px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.15);';
+            document.body.appendChild(feedbackMsg);
+            
+            // Remove feedback after 4 seconds
+            setTimeout(() => {
+                if (feedbackMsg.parentNode) {
+                    feedbackMsg.parentNode.removeChild(feedbackMsg);
+                }
+            }, 4000);
+            
+            // Focus the input for editing (don't auto-send)
+            inputElement.focus();
+            
+            // Optionally scroll to the end of the text for editing
+            if (inputElement.setSelectionRange) {
+                inputElement.setSelectionRange(inputElement.value.length, inputElement.value.length);
             }
         }, 200);
         return;
@@ -1082,8 +1328,8 @@ function setRecordingState(recording, button, input) {
     
     if (recording) {
         button.classList.add('recording');
-        button.title = "Recording... Click again to stop and send";
-        input.placeholder = "🎤 Listening... Speak now!";
+        button.title = "Recording... Click again to stop (ESC also works) - you can edit before sending";
+        input.placeholder = "🎤 Listening... Speak now! (Press ESC to stop without sending)";
         input.style.borderColor = '#dc2626';
         input.style.backgroundColor = 'rgba(220, 38, 38, 0.05)';
         
@@ -1091,7 +1337,7 @@ function setRecordingState(recording, button, input) {
         button.textContent = "🔴";
     } else {
         button.classList.remove('recording');
-        button.title = "Click to start voice input";
+        button.title = "Click to start voice input (press ESC while recording to stop without sending)";
         
         // Reset placeholder based on context
         if (input === userInput) {
@@ -1110,7 +1356,13 @@ function setRecordingState(recording, button, input) {
 
 // Get system prompt based on current stage
 function getSystemPrompt() {
-    const basePrompt = `You are an expert workflow automation consultant specializing in n8n workflows. Your goal is to help users plan and design automation workflows through collaborative dialogue. Always be friendly, encouraging, and educational.`;
+    const basePrompt = `You are an expert workflow automation consultant specializing in n8n workflows. Your goal is to help users plan and design automation workflows through collaborative dialogue. Always be friendly, encouraging, and educational.
+
+FORMATTING INSTRUCTIONS:
+- Use **bold text** to highlight important terms, steps, and key points
+- Use markdown formatting for better readability
+- Emphasize technical terms, node names, and important concepts with **bold**
+- Use bullet points and numbered lists when appropriate`;
     
     const designPrinciples = `
 Key n8n design principles to follow:

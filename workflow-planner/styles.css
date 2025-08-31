@@ -328,7 +328,7 @@ body::before {
 .chat-button-group {
     display: flex;
     gap: 12px;
-    align-items: flex-end;
+    align-items: center;
 }
 
 .chat-input {
@@ -365,6 +365,8 @@ body::before {
     align-items: center;
     justify-content: center;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    height: 44px;
+    min-width: 60px;
 }
 
 .chat-voice-btn:hover {
@@ -396,6 +398,10 @@ body::before {
     cursor: pointer;
     transition: all 0.3s ease;
     box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.3);
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .send-btn:hover {
@@ -434,6 +440,57 @@ body::before {
 
 .mermaid {
     text-align: center;
+}
+
+/* Hide Mermaid external error displays */
+.mermaidTooltip, 
+.mermaid-error, 
+div[id^="mermaid-"] .error,
+.mermaid .error-text,
+div[class*="error"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+}
+
+/* Hide any error elements that appear outside our chat container */
+body > .error,
+body > div[style*="position: absolute"],
+body > div[style*="position: fixed"] {
+    display: none !important;
+}
+
+/* Hide specific Mermaid error messages that appear outside chat */
+*[class*="syntax-error"],
+*[class*="error-message"],
+.error-popup,
+.mermaid-parse-error,
+div:not(.container):not(.chat-messages):not(.message):contains("Syntax error"),
+div:not(.container):not(.chat-messages):not(.message):contains("mermaid version") {
+    display: none !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    left: -9999px !important;
+    top: -9999px !important;
+}
+
+/* Diagram Loading Styles */
+.diagram-loading {
+    padding: 20px;
+    text-align: center;
+    color: #1e293b;
+}
+
+.diagram-loading strong {
+    color: #2563eb;
+    font-size: 1.1rem;
+}
+
+.diagram-loading .progress-text {
+    font-size: 0.9rem;
+    color: #64748b;
+    font-style: italic;
+    margin-top: 10px;
 }
 
 /* Diagram Error Styles */

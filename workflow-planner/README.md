@@ -12,25 +12,36 @@ An interactive web application that helps users plan and design automation workf
 
 ## Quick Start
 
-1. **Start the server**:
-   ```bash
-   python3 server.py
-   ```
-   Or simply:
-   ```bash
-   ./server.py
-   ```
+### 1. Configure API Keys
+Set up your `.env` file with your OpenAI and Anthropic API keys (see API Configuration section below).
 
-2. **Open your browser**: Navigate to http://localhost:8080
+### 2. Start the Server
+Since this is a client-side app, serve it over HTTP (required for loading `.env` file):
 
-3. **Start planning**: Type your automation idea or click a suggestion button
+```bash
+# Option 1: Python
+python3 -m http.server 8000
+
+# Option 2: Node.js  
+npx http-server -p 8000
+
+# Option 3: PHP
+php -S localhost:8000
+```
+
+### 3. Open Your Browser
+Navigate to http://localhost:8000
+
+### 4. Start Planning
+Type your automation idea or click a suggestion button
 
 ## How It Works
 
 1. **Describe Your Need**: Tell the AI what you want to automate
 2. **Answer Questions**: The AI will ask 2-3 clarifying questions about your systems and processes
 3. **Review Diagram**: A visual workflow diagram will be generated automatically
-4. **Iterate**: Provide feedback to refine the workflow until it's perfect
+4. **Generate JSON**: Click "Let's Build It!" to create production-ready n8n workflow JSON
+5. **Download & Import**: Download the JSON file and import it directly into your n8n instance
 
 ## Example Prompts
 
@@ -41,7 +52,22 @@ An interactive web application that helps users plan and design automation workf
 
 ## API Configuration
 
-The application uses OpenAI's GPT API. The API key is currently embedded in `app.js`. For production use, implement a backend proxy to secure your API key.
+### Setup Your API Keys
+
+1. Copy the `.env` file and update it with your actual API keys:
+   ```bash
+   # Get your OpenAI API key from: https://platform.openai.com/api-keys
+   OPENAI_API_KEY=your-actual-openai-api-key-here
+   
+   # Get your Anthropic API key from: https://console.anthropic.com/
+   ANTHROPIC_API_KEY=your-actual-anthropic-api-key-here
+   ```
+
+2. Save the `.env` file (it's already in `.gitignore` for security)
+
+### Why Both APIs?
+- **OpenAI GPT-4**: Powers the conversational workflow planning
+- **Claude 4 Sonnet**: Generates production-ready n8n JSON workflows
 
 ## Technologies Used
 
