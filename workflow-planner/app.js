@@ -54,6 +54,7 @@ const submitBtn = document.getElementById('submitBtn');
 const voiceBtn = document.getElementById('voiceBtn');
 const chatMessages = document.getElementById('chatMessages');
 const chatInput = document.getElementById('chatInput');
+const chatVoiceBtn = document.getElementById('chatVoiceBtn');
 const sendBtn = document.getElementById('sendBtn');
 const backBtn = document.getElementById('backBtn');
 const loadingOverlay = document.getElementById('loadingOverlay');
@@ -67,7 +68,7 @@ const downloadSvg = document.getElementById('downloadSvg');
 
 // Event Listeners
 submitBtn.addEventListener('click', handleInitialSubmit);
-voiceBtn.addEventListener('click', handleVoiceInput);
+voiceBtn.addEventListener('click', () => handleVoiceInput(userInput, handleInitialSubmit));
 userInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -76,6 +77,7 @@ userInput.addEventListener('keydown', (e) => {
 });
 
 sendBtn.addEventListener('click', handleChatSubmit);
+chatVoiceBtn.addEventListener('click', () => handleVoiceInput(chatInput, handleChatSubmit));
 chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -920,19 +922,21 @@ function downloadWorkflowJSON(jsonWorkflow) {
 }
 
 // Handle voice input with Web Speech API
-function handleVoiceInput() {
+function handleVoiceInput(inputElement, submitHandler) {
+    const isMainScreen = inputElement === userInput;
+    const voiceButton = isMainScreen ? voiceBtn : chatVoiceBtn;
     // STOP RECORDING AND AUTO-SEND LOGIC
     if (isRecording && recognition) {
         recognition.stop();
-        setRecordingState(false);
+        setRecordingState(false, voiceButton, inputElement);
         
         // Use a short delay to ensure recognition has finished processing
         setTimeout(() => {
-            const currentInput = userInput.value.trim();
+            const currentInput = inputElement.value.trim();
             console.log('Stopping recording. Current input:', currentInput);
             if (currentInput.trim()) {
                 // Auto-submit the form
-                handleInitialSubmit();
+                submitHandler();
             }
         }, 200);
         return;
@@ -956,9 +960,9 @@ function handleVoiceInput() {
     
     // Recording started handler
     recognitionInstance.onstart = () => {
-        setRecordingState(true);
+        setRecordingState(true, voiceButton, inputElement);
         recognition = recognitionInstance;
-        initialInputContent = userInput.value; // Preserve any existing text
+        initialInputContent = inputElement.value; // Preserve any existing text
         console.log('Voice recognition started - Speak now!');
     };
     
@@ -979,13 +983,13 @@ function handleVoiceInput() {
         
         // Combine initial text + final results + interim results
         const combinedInput = initialInputContent + finalTranscript + interimTranscript;
-        userInput.value = combinedInput;
+        inputElement.value = combinedInput;
     };
     
     // Error handling
     recognitionInstance.onerror = (event) => {
         console.error('Speech recognition error:', event.error);
-        setRecordingState(false);
+        setRecordingState(false, voiceButton, inputElement);
         recognition = null;
         
         if (event.error === 'not-allowed') {
@@ -999,7 +1003,7 @@ function handleVoiceInput() {
     
     // Cleanup when recognition ends
     recognitionInstance.onend = () => {
-        setRecordingState(false);
+        setRecordingState(false, voiceButton, inputElement);
         recognition = null;
         console.log('Voice recognition ended');
     };
@@ -1009,44 +1013,40 @@ function handleVoiceInput() {
         recognitionInstance.start();
     } catch (error) {
         console.error('Failed to start recognition:', error);
-        setRecordingState(false);
+        setRecordingState(false, voiceButton, inputElement);
         alert("Failed to start voice recognition. Please try again.");
     }
 }
 
 // Set recording state and update UI
-function setRecordingState(recording) {
+function setRecordingState(recording, button, input) {
     isRecording = recording;
     
     if (recording) {
-        voiceBtn.classList.add('recording');
-        voiceBtn.title = "Recording... Click again to stop and send";
-        userInput.placeholder = "🎤 Listening... Speak now!";
-        userInput.style.borderColor = '#dc2626';
-        userInput.style.backgroundColor = 'rgba(220, 38, 38, 0.05)';
+        button.classList.add('recording');
+        button.title = "Recording... Click again to stop and send";
+        input.placeholder = "🎤 Listening... Speak now!";
+        input.style.borderColor = '#dc2626';
+        input.style.backgroundColor = 'rgba(220, 38, 38, 0.05)';
         
-        // Change icon to stop/recording state
-        voiceBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="6" y="6" width="12" height="12"></rect>
-            </svg>
-        `;
+        // Change text to stop indicator
+        button.textContent = "🔴";
     } else {
-        voiceBtn.classList.remove('recording');
-        voiceBtn.title = "Click to start voice input";
-        userInput.placeholder = "What are you trying to automate?";
-        userInput.style.borderColor = '';
-        userInput.style.backgroundColor = '';
+        button.classList.remove('recording');
+        button.title = "Click to start voice input";
         
-        // Change icon back to microphone
-        voiceBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                <line x1="12" y1="19" x2="12" y2="23"></line>
-                <line x1="8" y1="23" x2="16" y2="23"></line>
-            </svg>
-        `;
+        // Reset placeholder based on context
+        if (input === userInput) {
+            input.placeholder = "What are you trying to automate?";
+        } else {
+            input.placeholder = "Type your message...";
+        }
+        
+        input.style.borderColor = '';
+        input.style.backgroundColor = '';
+        
+        // Change text back to microphone
+        button.textContent = "🎤";
     }
 }
 

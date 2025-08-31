@@ -60,7 +60,7 @@ body::before {
 
 .main-input {
     width: 100%;
-    padding: 20px 60px 20px 20px;
+    padding: 20px;
     font-size: 1.1rem;
     background: rgba(255, 255, 255, 0.95);
     border: 2px solid transparent;
@@ -82,55 +82,45 @@ body::before {
     color: #94a3b8;
 }
 
-.textarea-container {
-    position: relative;
-    width: 100%;
+.button-group {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 20px;
 }
 
-.voice-btn-inline {
-    position: absolute;
-    right: 20px;
-    top: 20px;
-    width: 36px;
-    height: 36px;
-    padding: 0;
+.voice-btn {
+    padding: 14px 24px;
+    font-size: 1.1rem;
+    font-weight: 600;
     background: rgba(255, 255, 255, 0.95);
-    color: #6b7280;
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    color: #1e293b;
+    border: 2px solid rgba(251, 146, 60, 0.3);
     border-radius: 8px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 10;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.voice-btn-inline:hover {
-    background: linear-gradient(135deg, #ea580c, #fb923c);
-    color: white;
-    transform: scale(1.05);
-    box-shadow: 0 2px 6px rgba(251, 146, 60, 0.3);
-    border-color: transparent;
+.voice-btn:hover {
+    background: linear-gradient(135deg, #fef3c7, #fed7aa);
+    border-color: #fb923c;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(251, 146, 60, 0.2);
 }
 
-.voice-btn-inline.recording {
+.voice-btn.recording {
     background: linear-gradient(135deg, #dc2626, #ef4444);
     color: white;
+    border-color: #dc2626;
     animation: pulse 2s infinite;
 }
 
-.voice-btn-inline.recording:hover {
+.voice-btn.recording:hover {
     background: linear-gradient(135deg, #b91c1c, #dc2626);
-}
-
-.voice-btn-inline svg {
-    transition: transform 0.2s ease;
-}
-
-.voice-btn-inline:hover svg {
-    transform: scale(1.1);
 }
 
 @keyframes pulse {
@@ -145,8 +135,6 @@ body::before {
 }
 
 .submit-btn {
-    float: right;
-    margin-top: 20px;
     padding: 14px 32px;
     font-size: 1rem;
     font-weight: 600;
@@ -335,13 +323,18 @@ body::before {
 .chat-input-wrapper {
     padding: 20px;
     border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.chat-button-group {
     display: flex;
     gap: 12px;
+    align-items: flex-end;
 }
 
 .chat-input {
-    flex: 1;
+    width: 100%;
     padding: 12px;
+    margin-bottom: 12px;
     font-size: 1rem;
     background: rgba(255, 255, 255, 0.95);
     border: 2px solid transparent;
@@ -356,6 +349,40 @@ body::before {
     outline: none;
     border-color: #fb923c;
     box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.2);
+}
+
+.chat-voice-btn {
+    padding: 12px 16px;
+    font-size: 1rem;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.95);
+    color: #1e293b;
+    border: 2px solid rgba(251, 146, 60, 0.3);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.chat-voice-btn:hover {
+    background: linear-gradient(135deg, #fef3c7, #fed7aa);
+    border-color: #fb923c;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(251, 146, 60, 0.2);
+}
+
+.chat-voice-btn.recording {
+    background: linear-gradient(135deg, #dc2626, #ef4444);
+    color: white;
+    border-color: #dc2626;
+    animation: pulse 2s infinite;
+}
+
+.chat-voice-btn.recording:hover {
+    background: linear-gradient(135deg, #b91c1c, #dc2626);
 }
 
 .send-btn {

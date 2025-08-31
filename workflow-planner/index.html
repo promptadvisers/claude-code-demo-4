@@ -17,23 +17,18 @@
         
         <div class="input-section">
             <div class="input-wrapper">
-                <div class="textarea-container">
-                    <textarea 
-                        id="userInput" 
-                        class="main-input" 
-                        placeholder="What are you trying to automate?"
-                        rows="4"
-                    ></textarea>
-                    <button id="voiceBtn" class="voice-btn-inline" type="button" title="Click to start voice input">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                            <line x1="12" y1="19" x2="12" y2="23"></line>
-                            <line x1="8" y1="23" x2="16" y2="23"></line>
-                        </svg>
+                <textarea 
+                    id="userInput" 
+                    class="main-input" 
+                    placeholder="What are you trying to automate?"
+                    rows="4"
+                ></textarea>
+                <div class="button-group">
+                    <button id="voiceBtn" class="voice-btn" type="button" title="Click to start voice input">
+                        🎤
                     </button>
+                    <button id="submitBtn" class="submit-btn" type="button">Create workflow plan</button>
                 </div>
-                <button id="submitBtn" class="submit-btn" type="button">Create workflow plan</button>
             </div>
             
             <div class="suggestions">
@@ -64,7 +59,12 @@
                     placeholder="Type your message..."
                     rows="2"
                 ></textarea>
-                <button id="sendBtn" class="send-btn">Send</button>
+                <div class="chat-button-group">
+                    <button id="chatVoiceBtn" class="chat-voice-btn" type="button" title="Click to start voice input">
+                        🎤
+                    </button>
+                    <button id="sendBtn" class="send-btn">Send</button>
+                </div>
             </div>
         </div>
     </div>
