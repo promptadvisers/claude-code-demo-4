@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflow Planner - AI-Powered Automation Assistant</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 class="main-title">What would you like to automate?</h1>
+        </header>
+        
+        <div class="input-section">
+            <div class="input-wrapper">
+                <textarea 
+                    id="userInput" 
+                    class="main-input" 
+                    placeholder="What are you trying to automate?"
+                    rows="4"
+                ></textarea>
+                <button id="submitBtn" class="submit-btn">Create workflow plan</button>
+            </div>
+            
+            <div class="suggestions">
+                <button class="suggestion-btn" data-suggestion="Invoice processing pipeline">Invoice processing pipeline</button>
+                <button class="suggestion-btn" data-suggestion="Daily AI news digest">Daily AI news digest</button>
+                <button class="suggestion-btn" data-suggestion="RAG knowledge assistant">RAG knowledge assistant</button>
+                <button class="suggestion-btn" data-suggestion="Summarize emails with AI">Summarize emails with AI</button>
+                <button class="suggestion-btn" data-suggestion="YouTube video chapters">YouTube video chapters</button>
+                <button class="suggestion-btn" data-suggestion="Pizza delivery chatbot">Pizza delivery chatbot</button>
+                <button class="suggestion-btn" data-suggestion="Lead qualification and call scheduling">Lead qualification and call scheduling</button>
+                <button class="suggestion-btn" data-suggestion="Multi-agent research workflow">Multi-agent research workflow</button>
+            </div>
+        </div>
+        
+        <!-- Chat Interface (hidden by default) -->
+        <div class="chat-interface" id="chatInterface" style="display: none;">
+            <div class="chat-header">
+                <h2>AI Workflow Builder Chat</h2>
+                <button class="back-btn" id="backBtn">← Back to Start</button>
+            </div>
+            <div class="chat-messages" id="chatMessages">
+                <!-- Messages will be dynamically added here -->
+            </div>
+            <div class="chat-input-wrapper">
+                <textarea 
+                    id="chatInput" 
+                    class="chat-input" 
+                    placeholder="Type your message..."
+                    rows="2"
+                ></textarea>
+                <button id="sendBtn" class="send-btn">Send</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <p class="loading-text" id="loadingText">The AI workflow builder is thinking...</p>
+        </div>
+    </div>
+    
+    <!-- Diagram Modal -->
+    <div class="modal" id="diagramModal">
+        <div class="modal-content">
+            <span class="modal-close" id="modalClose">&times;</span>
+            <div class="modal-header">
+                <h3>Workflow Diagram</h3>
+            </div>
+            <div class="modal-actions">
+                <button class="download-btn" id="downloadPng">Download PNG</button>
+                <button class="download-btn" id="downloadSvg">Download SVG</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Diagram will be inserted here -->
+            </div>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
