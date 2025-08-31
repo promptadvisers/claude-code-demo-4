@@ -45,6 +45,9 @@ let isRecording = false;
 let recognition = null;
 let initialInputContent = "";
 
+// Explanation state
+let explanationShownForSession = false;
+
 // DOM Elements
 const container = document.querySelector('.container');
 const inputSection = document.getElementById('inputSection') || document.querySelector('.input-section');
@@ -95,6 +98,7 @@ backBtn.addEventListener('click', () => {
     currentStage = 'initial';
     clarificationCount = 0;
     diagramCount = 0;
+    explanationShownForSession = false; // Reset explanation state
     chatMessages.innerHTML = '';
     userInput.value = '';
 });
@@ -178,16 +182,16 @@ function addMessage(role, content, isDiagram = false, messageId = null) {
         containerDiv.id = 'diagram-' + Date.now();
         
         // Try to render the diagram with error handling
-        const renderResult = renderMermaidDiagram(content, containerDiv);
-        
-        if (renderResult.success) {
-            containerDiv.title = 'Click to view full diagram';
-            // Make it clickable only if successful
-            containerDiv.addEventListener('click', () => openDiagramModal(content));
-        } else {
-            // Handle diagram error
-            handleDiagramError(content, containerDiv, renderResult.error);
-        }
+        renderMermaidDiagram(content, containerDiv).then((renderResult) => {
+            if (renderResult.success) {
+                containerDiv.title = 'Click to view full diagram';
+                // Make it clickable only if successful
+                containerDiv.addEventListener('click', () => openDiagramModal(content));
+            } else {
+                // Handle diagram error
+                handleDiagramError(content, containerDiv, renderResult.error);
+            }
+        });
         
         messageDiv.appendChild(labelDiv);
         messageDiv.appendChild(containerDiv);
@@ -219,19 +223,27 @@ function renderMermaidDiagram(content, containerDiv) {
         mermaidDiv.textContent = content;
         containerDiv.appendChild(mermaidDiv);
         
-        // Attempt to parse and render
-        mermaid.init(undefined, mermaidDiv);
-        
-        // Check if rendering was successful
-        const svgElement = mermaidDiv.querySelector('svg');
-        if (!svgElement) {
-            throw new Error('Diagram rendering failed - no SVG generated');
-        }
-        
-        return { success: true };
+        // Attempt to parse and render with error handling
+        return new Promise((resolve) => {
+            try {
+                mermaid.init(undefined, mermaidDiv).then(() => {
+                    // Check if rendering was successful
+                    const svgElement = mermaidDiv.querySelector('svg');
+                    if (!svgElement) {
+                        resolve({ success: false, error: 'Diagram rendering failed - no SVG generated' });
+                    } else {
+                        resolve({ success: true });
+                    }
+                }).catch((error) => {
+                    resolve({ success: false, error: error.message || 'Mermaid syntax error' });
+                });
+            } catch (syncError) {
+                resolve({ success: false, error: syncError.message || 'Mermaid parsing error' });
+            }
+        });
     } catch (error) {
         console.error('Mermaid rendering error:', error);
-        return { success: false, error: error.message };
+        return Promise.resolve({ success: false, error: error.message });
     }
 }
 
@@ -317,20 +329,21 @@ Return ONLY the fixed Mermaid code without any explanation or markdown fences.`;
             // Try rendering the fixed diagram
             containerDiv.innerHTML = '';
             containerDiv.classList.remove('error-state');
-            const renderResult = renderMermaidDiagram(fixedDiagram, containerDiv);
             
-            if (renderResult.success) {
-                // Success! Make it clickable
-                containerDiv.title = 'Click to view full diagram';
-                containerDiv.addEventListener('click', () => openDiagramModal(fixedDiagram));
-                diagramRetryCount = 0; // Reset counter
-                
-                // Add success message
-                addMessage('assistant', '✅ Diagram syntax has been automatically corrected and is now displaying properly.');
-            } else {
-                // Still broken, try again or show final error
-                handleDiagramError(fixedDiagram, containerDiv, renderResult.error);
-            }
+            renderMermaidDiagram(fixedDiagram, containerDiv).then((renderResult) => {
+                if (renderResult.success) {
+                    // Success! Make it clickable
+                    containerDiv.title = 'Click to view full diagram';
+                    containerDiv.addEventListener('click', () => openDiagramModal(fixedDiagram));
+                    diagramRetryCount = 0; // Reset counter
+                    
+                    // Add success message
+                    addMessage('assistant', '✅ Diagram syntax has been automatically corrected and is now displaying properly.');
+                } else {
+                    // Still broken, try again or show final error
+                    handleDiagramError(fixedDiagram, containerDiv, renderResult.error);
+                }
+            });
         }
     } catch (error) {
         console.error('Error requesting diagram fix:', error);
@@ -359,18 +372,18 @@ function openDiagramModal(diagramCode) {
     modalBody.innerHTML = '';
     
     // Try to render in modal with error handling
-    const renderResult = renderMermaidDiagram(diagramCode, modalBody);
-    
-    if (!renderResult.success) {
-        // Show error in modal
-        modalBody.innerHTML = `
-            <div class="diagram-error">
-                <p><strong>⚠️ Unable to display diagram</strong></p>
-                <p>The diagram has syntax errors that need to be corrected.</p>
-                <p class="error-detail">${renderResult.error}</p>
-            </div>
-        `;
-    }
+    renderMermaidDiagram(diagramCode, modalBody).then((renderResult) => {
+        if (!renderResult.success) {
+            // Show error in modal
+            modalBody.innerHTML = `
+                <div class="diagram-error">
+                    <p><strong>⚠️ Unable to display diagram</strong></p>
+                    <p>The diagram has syntax errors that need to be corrected.</p>
+                    <p class="error-detail">${renderResult.error}</p>
+                </div>
+            `;
+        }
+    });
     
     // Show modal regardless
     diagramModal.classList.add('active');
@@ -532,9 +545,15 @@ async function processUserInput(input) {
                 addMessage('assistant', textAfter.trim());
             }
             
-            // Add educational explanation as a second message
+            // Add educational explanation only for the first diagram
             setTimeout(() => {
-                addEducationalExplanation(diagramCode);
+                if (!explanationShownForSession) {
+                    addEducationalExplanation(diagramCode);
+                    explanationShownForSession = true;
+                } else {
+                    // For subsequent diagrams, offer explanation option
+                    addExplanationOption(diagramCode);
+                }
             }, 1000);
             
             currentStage = 'diagram_generated';
@@ -609,6 +628,45 @@ Example tone: "I designed this workflow to start with X because... I chose to us
     } catch (error) {
         console.error('Error getting explanation:', error);
     }
+}
+
+// Add explanation option for subsequent diagrams
+function addExplanationOption(diagramCode) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message assistant';
+    
+    const labelDiv = document.createElement('div');
+    labelDiv.className = 'message-label';
+    labelDiv.textContent = 'AI Assistant';
+    
+    const optionContainer = document.createElement('div');
+    optionContainer.className = 'explanation-option-container';
+    
+    const description = document.createElement('div');
+    description.className = 'explanation-option-description';
+    description.textContent = 'Would you like me to explain the design rationale for this workflow?';
+    
+    const explanationBtn = document.createElement('button');
+    explanationBtn.className = 'explanation-option-btn';
+    explanationBtn.textContent = 'Yes, explain the design 💡';
+    explanationBtn.addEventListener('click', () => {
+        // Remove the option and add explanation
+        messageDiv.remove();
+        addEducationalExplanation(diagramCode);
+    });
+    
+    optionContainer.appendChild(description);
+    optionContainer.appendChild(explanationBtn);
+    
+    messageDiv.appendChild(labelDiv);
+    messageDiv.appendChild(optionContainer);
+    
+    chatMessages.appendChild(messageDiv);
+    
+    // Auto-scroll to show option
+    setTimeout(() => {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }, 100);
 }
 
 // Add Build It button after explanation
