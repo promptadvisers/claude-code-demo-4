@@ -552,12 +552,15 @@ async function processUserInput(input) {
 // Add educational explanation after diagram
 async function addEducationalExplanation(diagramCode) {
     const explanationPrompt = `
-Based on the workflow diagram that was just created, provide a friendly, conversational explanation of:
-1. Why this workflow design makes sense for the user's needs
-2. Key design decisions and their benefits
-3. How this follows n8n best practices
+Based on the workflow diagram that was just created, write a first-person explanation directly to the user explaining:
+1. Why I chose this specific workflow design for their needs
+2. The intentional design decisions I made and why each step matters
+3. How I applied n8n best practices in this design
+4. What specific benefits they'll get from this approach
 
-Keep it conversational and educational, like explaining to a friend. Use simple language and be encouraging. Maximum 3-4 paragraphs.`;
+Write as "I" speaking directly to "you" - be conversational, educational, and confident about the design choices. Explain your reasoning behind using certain nodes, the order of operations, and why this structure will be effective for their use case. Maximum 3-4 paragraphs.
+
+Example tone: "I designed this workflow to start with X because... I chose to use a Switch node here instead of IF nodes because... I placed the error handling at this point because..."`;
 
     try {
         const response = await fetch(API_ENDPOINT, {
@@ -569,7 +572,7 @@ Keep it conversational and educational, like explaining to a friend. Use simple 
             body: JSON.stringify({
                 model: 'gpt-4o-mini',
                 messages: [
-                    { role: 'system', content: 'You are a friendly workflow automation expert who explains complex concepts simply.' },
+                    { role: 'system', content: 'You are a workflow automation expert speaking directly to a user. Use first person (I) and explain your design decisions confidently and personally.' },
                     ...conversationHistory.slice(-5),
                     { role: 'user', content: explanationPrompt }
                 ],
@@ -583,7 +586,7 @@ Keep it conversational and educational, like explaining to a friend. Use simple 
             const explanation = data.choices[0].message.content;
             
             // Add explanation as a separate message
-            addMessage('assistant', `💡 **Why this workflow design?**\n\n${explanation}`);
+            addMessage('assistant', `💡 **My design rationale for this workflow:**\n\n${explanation}`);
         }
     } catch (error) {
         console.error('Error getting explanation:', error);
