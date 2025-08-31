@@ -40,12 +40,18 @@ let diagramCount = 0;
 let currentLoadingMessageIndex = 0;
 let loadingInterval = null;
 
+// Voice input state
+let isRecording = false;
+let recognition = null;
+let initialInputContent = "";
+
 // DOM Elements
 const container = document.querySelector('.container');
 const inputSection = document.getElementById('inputSection') || document.querySelector('.input-section');
 const chatInterface = document.getElementById('chatInterface');
 const userInput = document.getElementById('userInput');
 const submitBtn = document.getElementById('submitBtn');
+const voiceBtn = document.getElementById('voiceBtn');
 const chatMessages = document.getElementById('chatMessages');
 const chatInput = document.getElementById('chatInput');
 const sendBtn = document.getElementById('sendBtn');
@@ -61,6 +67,7 @@ const downloadSvg = document.getElementById('downloadSvg');
 
 // Event Listeners
 submitBtn.addEventListener('click', handleInitialSubmit);
+voiceBtn.addEventListener('click', handleVoiceInput);
 userInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -909,6 +916,120 @@ function downloadWorkflowJSON(jsonWorkflow) {
     } catch (error) {
         console.error('Error downloading JSON:', error);
         addMessage('assistant', `❌ **Download failed**\n\nThere was an error downloading the file: ${error.message}. Please try again.`);
+    }
+}
+
+// Handle voice input with Web Speech API
+function handleVoiceInput() {
+    // STOP RECORDING AND AUTO-SEND LOGIC
+    if (isRecording && recognition) {
+        recognition.stop();
+        setRecordingState(false);
+        
+        // Use a short delay to ensure recognition has finished processing
+        setTimeout(() => {
+            const currentInput = userInput.value.trim();
+            console.log('Stopping recording. Current input:', currentInput);
+            if (currentInput.trim()) {
+                // Auto-submit the form
+                handleInitialSubmit();
+            }
+        }, 200);
+        return;
+    }
+
+    // START RECORDING LOGIC
+    // Check for Web Speech API support
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        alert("Voice input is not supported in your browser. Please try Chrome or Edge.");
+        return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognitionInstance = new SpeechRecognition();
+    
+    // CRITICAL CONFIGURATION FOR REAL-TIME TRANSCRIPTION
+    recognitionInstance.continuous = true;  // Keep recording until manually stopped
+    recognitionInstance.interimResults = true;  // Get partial results while speaking
+    recognitionInstance.lang = 'en-US';
+    recognitionInstance.maxAlternatives = 1;
+    
+    // Recording started handler
+    recognitionInstance.onstart = () => {
+        setRecordingState(true);
+        recognition = recognitionInstance;
+        initialInputContent = userInput.value; // Preserve any existing text
+        console.log('Voice recognition started - Speak now!');
+    };
+    
+    // REAL-TIME TRANSCRIPTION HANDLER - This is the key part!
+    recognitionInstance.onresult = (event) => {
+        let finalTranscript = '';
+        let interimTranscript = '';
+        
+        // Process ALL results to build complete transcript
+        for (let i = 0; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+                finalTranscript += transcript + ' ';
+            } else {
+                interimTranscript += transcript;
+            }
+        }
+        
+        // Combine initial text + final results + interim results
+        const combinedInput = initialInputContent + finalTranscript + interimTranscript;
+        userInput.value = combinedInput;
+    };
+    
+    // Error handling
+    recognitionInstance.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        setRecordingState(false);
+        recognition = null;
+        
+        if (event.error === 'not-allowed') {
+            alert("Please allow microphone access to use voice input.");
+        } else if (event.error === 'no-speech') {
+            console.log("No speech detected");
+        } else if (event.error !== 'aborted') {
+            alert(`Voice input error: ${event.error}`);
+        }
+    };
+    
+    // Cleanup when recognition ends
+    recognitionInstance.onend = () => {
+        setRecordingState(false);
+        recognition = null;
+        console.log('Voice recognition ended');
+    };
+    
+    // Start recognition
+    try {
+        recognitionInstance.start();
+    } catch (error) {
+        console.error('Failed to start recognition:', error);
+        setRecordingState(false);
+        alert("Failed to start voice recognition. Please try again.");
+    }
+}
+
+// Set recording state and update UI
+function setRecordingState(recording) {
+    isRecording = recording;
+    
+    if (recording) {
+        voiceBtn.classList.add('recording');
+        voiceBtn.title = "Recording... Click again to stop and send";
+        userInput.placeholder = "🎤 Listening... Speak now!";
+        userInput.style.borderColor = '#dc2626';
+        userInput.style.backgroundColor = 'rgba(220, 38, 38, 0.05)';
+    } else {
+        voiceBtn.classList.remove('recording');
+        voiceBtn.title = "Click to start voice input";
+        userInput.placeholder = "What are you trying to automate?";
+        userInput.style.borderColor = '';
+        userInput.style.backgroundColor = '';
     }
 }
 
