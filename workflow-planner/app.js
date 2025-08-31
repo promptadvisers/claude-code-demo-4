@@ -378,16 +378,18 @@ function handleDiagramError(diagramCode, containerDiv, errorMessage) {
     diagramRetryCount++;
     
     if (diagramRetryCount <= MAX_DIAGRAM_RETRIES) {
-        // Show error state with auto-retry message
+        // Show persistent auto-healing message with more detail
         containerDiv.innerHTML = `
-            <div class="diagram-error">
-                <p><strong>📊 Diagram Error Detected</strong></p>
-                <p>Automatically fixing the diagram syntax...</p>
-                <p class="error-detail">Attempt ${diagramRetryCount} of ${MAX_DIAGRAM_RETRIES}</p>
+            <div class="diagram-loading">
+                <p><strong>🔧 Auto-Healing Diagram (Attempt ${diagramRetryCount}/${MAX_DIAGRAM_RETRIES})</strong></p>
+                <p>AI is analyzing and fixing the diagram syntax...</p>
                 <div class="error-spinner"></div>
+                <p class="progress-text">Detected issue: Special characters in node labels</p>
+                <p class="progress-text">Applying automatic corrections...</p>
             </div>
         `;
-        containerDiv.classList.add('error-state');
+        containerDiv.classList.remove('error-state');
+        containerDiv.classList.add('healing-state');
         
         // Automatically request a fixed version
         requestDiagramFix(diagramCode, errorMessage, containerDiv);
@@ -409,7 +411,7 @@ function handleDiagramError(diagramCode, containerDiv, errorMessage) {
 
 // Request AI to fix the diagram
 async function requestDiagramFix(brokenDiagram, errorMessage, containerDiv) {
-    const fixPrompt = `The Mermaid diagram has a syntax error. Please fix it and return ONLY the corrected Mermaid code, nothing else.
+    const fixPrompt = `The Mermaid diagram has a syntax error. Fix it by removing ALL special characters from node labels.
 
 Error message: ${errorMessage}
 
@@ -418,12 +420,20 @@ Broken diagram:
 ${brokenDiagram}
 \`\`\`
 
-Common fixes:
-- Ensure all node IDs are defined before being referenced
-- Use proper syntax for node shapes: [] for rectangles, {} for diamonds
-- Escape special characters in labels
-- Use proper arrow syntax: -->, --->, -.->
-- Ensure proper indentation and spacing
+CRITICAL FIXES TO APPLY:
+1. Remove ALL parentheses () from node labels
+2. Remove ALL hyphens - from node labels  
+3. Remove ALL quotes " from node labels
+4. Remove ALL ampersands & from node labels
+5. Replace complex labels with simple plain text
+6. Use only alphanumeric node IDs: A, B, C, Step1, Step2
+7. Use only --> for arrows (no dotted or thick arrows)
+
+EXAMPLE TRANSFORMATIONS:
+- [Configuration (Set) - Centralized] → [Configuration Setup]
+- [Data & Processing] → [Data Processing]
+- ["API Call"] → [API Call]
+- [RSS-Parser] → [RSS Parser]
 
 Return ONLY the fixed Mermaid code without any explanation or markdown fences.`;
 
@@ -1399,14 +1409,26 @@ ${designPrinciples}`;
         
 Based on the conversation so far, create a detailed Mermaid diagram showing the workflow the user wants to automate. 
 
-CRITICAL MERMAID SYNTAX RULES:
+CRITICAL MERMAID SYNTAX RULES - FOLLOW EXACTLY:
 - Every node ID must be defined before it's referenced
-- Use only alphanumeric characters for node IDs (no spaces or special chars)
+- Use ONLY alphanumeric characters for node IDs: A, B, C or Step1, Step2, Step3
+- Node labels: NEVER use parentheses, hyphens, ampersands, quotes, or special characters
+- Node labels: Use simple plain text only: [Configuration Setup] NOT [Configuration (Set) - Centralized]
 - Node shapes: [text] for rectangles, {text} for diamonds, ([text]) for rounded
-- Arrow types: --> for solid, -.-> for dotted, ==> for thick
-- For text with special characters, wrap in quotes: ["Text with (parentheses)"]
-- Escape quotes in labels: [\\"Quoted text\\"]
-- Keep node IDs simple: A, B, C or Step1, Step2, Step3
+- Arrow types: --> for solid arrows (avoid dotted or thick arrows to prevent issues)
+- ABSOLUTELY NO special characters in labels: no (), [], {}, -, &, @, #, etc.
+- Keep everything simple and clean - plain text only
+
+EXAMPLES OF CORRECT SYNTAX:
+- A[Start Workflow] --> B[Load Configuration]
+- B --> C{Data Available}
+- C -->|Yes| D[Process Data]
+
+EXAMPLES OF WRONG SYNTAX (NEVER DO THIS):
+- Config[Configuration (Set) - Centralized] ❌ (parentheses and hyphens)
+- A --> B["Text"] ❌ (quotes)
+- Step[Process & Filter] ❌ (ampersand)
+- X[API-Call] ❌ (hyphen)
 
 The diagram should:
 1. Show all major steps in the process

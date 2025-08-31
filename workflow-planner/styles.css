@@ -493,6 +493,18 @@ div:not(.container):not(.chat-messages):not(.message):contains("mermaid version"
     margin-top: 10px;
 }
 
+/* Healing State Styles */
+.healing-state .diagram-loading strong {
+    color: #ea580c;
+    font-size: 1.1rem;
+}
+
+.healing-state {
+    border: 2px solid #fed7aa;
+    border-radius: 8px;
+    background: rgba(251, 191, 36, 0.05);
+}
+
 /* Diagram Error Styles */
 .diagram-error {
     padding: 20px;
