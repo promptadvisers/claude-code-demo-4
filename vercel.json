@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "workflow-planner/index.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "workflow-planner/*.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "workflow-planner/*.css",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/workflow-planner/$1"
+    },
+    {
+      "src": "/",
+      "dest": "/workflow-planner/index.html"
+    }
+  ]
+}
