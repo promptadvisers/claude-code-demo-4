@@ -587,10 +587,80 @@ Example tone: "I designed this workflow to start with X because... I chose to us
             
             // Add explanation as a separate message
             addMessage('assistant', `💡 **My design rationale for this workflow:**\n\n${explanation}`);
+            
+            // Add Build It button after explanation
+            setTimeout(() => {
+                addBuildItButton();
+            }, 500);
         }
     } catch (error) {
         console.error('Error getting explanation:', error);
     }
+}
+
+// Add Build It button after explanation
+function addBuildItButton() {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message assistant';
+    
+    const labelDiv = document.createElement('div');
+    labelDiv.className = 'message-label';
+    labelDiv.textContent = 'AI Assistant';
+    
+    const buildItContainer = document.createElement('div');
+    buildItContainer.className = 'build-it-container';
+    
+    const description = document.createElement('div');
+    description.className = 'build-it-description';
+    description.textContent = 'Ready to turn this workflow design into actual n8n JSON code?';
+    
+    const buildItBtn = document.createElement('button');
+    buildItBtn.className = 'build-it-btn';
+    buildItBtn.textContent = "Let's Build It! 🚀";
+    buildItBtn.id = 'buildWorkflowBtn';
+    
+    // Add click event listener
+    buildItBtn.addEventListener('click', handleBuildItClick);
+    
+    buildItContainer.appendChild(description);
+    buildItContainer.appendChild(buildItBtn);
+    
+    messageDiv.appendChild(labelDiv);
+    messageDiv.appendChild(buildItContainer);
+    
+    chatMessages.appendChild(messageDiv);
+    
+    // Auto-scroll to show button
+    setTimeout(() => {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }, 100);
+}
+
+// Handle Build It button click (placeholder for Claude 4 Sonnet integration)
+function handleBuildItClick() {
+    console.log('Build It clicked - will integrate Claude 4 Sonnet');
+    
+    // Disable button to prevent multiple clicks
+    const buildBtn = document.getElementById('buildWorkflowBtn');
+    if (buildBtn) {
+        buildBtn.disabled = true;
+        buildBtn.textContent = 'Building workflow... 🔨';
+    }
+    
+    // TODO: Implement Claude 4 Sonnet integration here
+    // For now, show a placeholder message
+    addMessage('assistant', '⚙️ **Building your n8n workflow...**\n\nI\'m now using Claude 4 Sonnet to generate the complete n8n JSON workflow based on our design. This will take just a moment...');
+    
+    // Placeholder for the actual implementation
+    setTimeout(() => {
+        addMessage('assistant', '🚧 **Integration Coming Soon**\n\nThe Claude 4 Sonnet integration for JSON generation will be implemented in the next step. This will generate a downloadable n8n workflow file.');
+        
+        // Re-enable button
+        if (buildBtn) {
+            buildBtn.disabled = false;
+            buildBtn.textContent = "Let's Build It! 🚀";
+        }
+    }, 2000);
 }
 
 // Get system prompt based on current stage

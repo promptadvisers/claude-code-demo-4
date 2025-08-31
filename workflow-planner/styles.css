@@ -633,6 +633,81 @@ body::before {
     background: rgba(251, 146, 60, 0.7);
 }
 
+/* Build It Button Styles */
+.build-it-container {
+    text-align: center;
+    margin: 30px 0;
+    padding: 20px;
+    animation: slideUp 0.5s ease;
+}
+
+.build-it-btn {
+    position: relative;
+    display: inline-block;
+    padding: 18px 48px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: white;
+    background: linear-gradient(135deg, #ea580c 0%, #fb923c 50%, #fbbf24 100%);
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 
+        0 8px 15px -3px rgba(234, 88, 12, 0.4),
+        0 0 30px rgba(251, 146, 60, 0.3);
+    overflow: hidden;
+}
+
+.build-it-btn::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(45deg, transparent, rgba(255,255,255,0.3), transparent);
+    transform: translateX(-100%) translateY(-100%) rotate(45deg);
+    transition: transform 0.6s;
+}
+
+.build-it-btn:hover::before {
+    transform: translateX(100%) translateY(100%) rotate(45deg);
+}
+
+.build-it-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 
+        0 15px 25px -3px rgba(234, 88, 12, 0.5),
+        0 0 40px rgba(251, 146, 60, 0.5);
+}
+
+.build-it-btn:active {
+    transform: translateY(-1px);
+}
+
+.build-it-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.build-it-btn:disabled:hover {
+    transform: none;
+    box-shadow: 
+        0 8px 15px -3px rgba(234, 88, 12, 0.4),
+        0 0 30px rgba(251, 146, 60, 0.3);
+}
+
+.build-it-description {
+    margin-bottom: 15px;
+    font-size: 1rem;
+    opacity: 0.9;
+    line-height: 1.5;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
     .main-title {
@@ -646,6 +721,11 @@ body::before {
     .suggestion-btn {
         font-size: 0.85rem;
         padding: 8px 16px;
+    }
+    
+    .build-it-btn {
+        padding: 16px 36px;
+        font-size: 1.1rem;
     }
     
     .message-content {
