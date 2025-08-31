@@ -2,6 +2,10 @@
 const API_KEY = 'your-openai-api-key-here'; // Replace with your OpenAI API key
 const API_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 
+// Claude 4 Sonnet Configuration
+const ANTHROPIC_API_KEY = 'your-anthropic-api-key-here'; // Replace with your Anthropic API key
+const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
+
 // Initialize Mermaid
 mermaid.initialize({ 
     startOnLoad: true,
@@ -636,9 +640,9 @@ function addBuildItButton() {
     }, 100);
 }
 
-// Handle Build It button click (placeholder for Claude 4 Sonnet integration)
-function handleBuildItClick() {
-    console.log('Build It clicked - will integrate Claude 4 Sonnet');
+// Handle Build It button click - Claude 4 Sonnet integration
+async function handleBuildItClick() {
+    console.log('Build It clicked - starting Claude 4 Sonnet integration');
     
     // Disable button to prevent multiple clicks
     const buildBtn = document.getElementById('buildWorkflowBtn');
@@ -647,20 +651,265 @@ function handleBuildItClick() {
         buildBtn.textContent = 'Building workflow... 🔨';
     }
     
-    // TODO: Implement Claude 4 Sonnet integration here
-    // For now, show a placeholder message
-    addMessage('assistant', '⚙️ **Building your n8n workflow...**\n\nI\'m now using Claude 4 Sonnet to generate the complete n8n JSON workflow based on our design. This will take just a moment...');
+    // Show building message
+    addMessage('assistant', '⚙️ **Building your n8n workflow...**\n\nI\'m now using Claude 4 Sonnet to generate the complete n8n JSON workflow based on our design. This may take a moment...');
     
-    // Placeholder for the actual implementation
-    setTimeout(() => {
-        addMessage('assistant', '🚧 **Integration Coming Soon**\n\nThe Claude 4 Sonnet integration for JSON generation will be implemented in the next step. This will generate a downloadable n8n workflow file.');
+    try {
+        // Get the workflow design from conversation history
+        const workflowDesign = extractWorkflowDesign();
         
-        // Re-enable button
-        if (buildBtn) {
-            buildBtn.disabled = false;
-            buildBtn.textContent = "Let's Build It! 🚀";
+        // Generate JSON with Claude 4 Sonnet
+        const jsonWorkflow = await generateWorkflowJSON(workflowDesign);
+        
+        if (jsonWorkflow) {
+            // Success - provide download
+            addMessage('assistant', '✅ **Workflow JSON Generated Successfully!**\n\nYour n8n workflow has been generated and is ready for download. Click the button below to download the JSON file that you can import directly into your n8n instance.');
+            addDownloadButton(jsonWorkflow);
+        } else {
+            // Failed after retries
+            addMessage('assistant', '❌ **Unable to Generate Workflow**\n\nI encountered issues generating a valid JSON workflow. Please try rephrasing your workflow requirements or try again.');
         }
-    }, 2000);
+        
+    } catch (error) {
+        console.error('Error in handleBuildItClick:', error);
+        addMessage('assistant', `❌ **Error Building Workflow**\n\nI encountered an error: ${error.message}. Please check your API key configuration and try again.`);
+    }
+    
+    // Re-enable button
+    if (buildBtn) {
+        buildBtn.disabled = false;
+        buildBtn.textContent = "Let's Build It! 🚀";
+    }
+}
+
+// Extract workflow design from conversation history
+function extractWorkflowDesign() {
+    // Get the last few messages that contain the workflow discussion
+    const relevantMessages = conversationHistory
+        .slice(-10) // Get last 10 messages
+        .map(msg => `${msg.role}: ${msg.content}`)
+        .join('\n\n');
+    
+    return relevantMessages;
+}
+
+// Generate workflow JSON using Claude 4 Sonnet
+async function generateWorkflowJSON(workflowDesign, retryCount = 0) {
+    const MAX_RETRIES = 3;
+    
+    const systemPrompt = `You are an expert n8n workflow automation designer and JSON generator.
+CRITICAL INSTRUCTIONS FOR JSON OUTPUT:
+1. You MUST respond with valid JSON only — no explanations, comments, or text
+2. The JSON must conform exactly to n8n's workflow export format
+3. Use double quotes throughout and proper syntax
+4. All IDs must be unique UUIDs, timestamps in ISO 8601
+5. Node types must use canonical n8n strings (e.g., "n8n-nodes-base.manualTrigger")
+Root fields: name, nodes, connections, active, settings, versionId, id, createdAt, updatedAt`;
+
+    const userPrompt = `Based on the following workflow discussion, generate a complete n8n workflow in JSON format:
+
+${workflowDesign}
+
+Create a functional n8n workflow JSON that:
+1. Implements the workflow design discussed
+2. Uses appropriate n8n node types
+3. Includes proper connections between nodes
+4. Has realistic configuration for each node
+5. Follows n8n best practices
+
+Return ONLY the JSON, no other text or formatting.`;
+
+    try {
+        const response = await fetch(ANTHROPIC_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ANTHROPIC_API_KEY}`,
+                'anthropic-version': '2023-06-01'
+            },
+            body: JSON.stringify({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 64000,
+                system: systemPrompt,
+                messages: [
+                    {
+                        role: 'user',
+                        content: userPrompt
+                    }
+                ],
+                temperature: 0.1
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Anthropic API request failed: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        let jsonContent = data.content[0].text;
+
+        // Clean up the response - remove any markdown formatting
+        jsonContent = cleanupJSONResponse(jsonContent);
+
+        // Validate the JSON
+        const validationResult = validateWorkflowJSON(jsonContent);
+        
+        if (validationResult.valid) {
+            return validationResult.json;
+        } else {
+            console.warn(`JSON validation failed (attempt ${retryCount + 1}):`, validationResult.error);
+            
+            if (retryCount < MAX_RETRIES) {
+                // Show retry message to user
+                addMessage('assistant', `⚠️ **Fixing JSON structure...** (Attempt ${retryCount + 1}/${MAX_RETRIES})\n\nThe generated JSON had syntax issues. Automatically retrying with corrections...`);
+                
+                // Wait a moment and retry
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                return generateWorkflowJSON(workflowDesign, retryCount + 1);
+            } else {
+                // Max retries reached
+                return null;
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error calling Claude 4 Sonnet:', error);
+        
+        if (retryCount < MAX_RETRIES) {
+            addMessage('assistant', `⚠️ **Connection issue, retrying...** (Attempt ${retryCount + 1}/${MAX_RETRIES})\n\nHaving trouble connecting to the AI service. Retrying automatically...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            return generateWorkflowJSON(workflowDesign, retryCount + 1);
+        }
+        
+        throw error;
+    }
+}
+
+// Clean up JSON response from Claude
+function cleanupJSONResponse(response) {
+    // Remove markdown code blocks
+    let cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+    
+    // Remove any leading/trailing whitespace
+    cleaned = cleaned.trim();
+    
+    // Look for the first { and last } to extract just the JSON
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    
+    if (firstBrace !== -1 && lastBrace !== -1) {
+        cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+    }
+    
+    return cleaned;
+}
+
+// Validate workflow JSON
+function validateWorkflowJSON(jsonString) {
+    try {
+        const parsed = JSON.parse(jsonString);
+        
+        // Basic validation of n8n workflow structure
+        if (!parsed.name || !parsed.nodes || !parsed.connections) {
+            return {
+                valid: false,
+                error: 'Missing required fields: name, nodes, or connections'
+            };
+        }
+        
+        if (!Array.isArray(parsed.nodes)) {
+            return {
+                valid: false,
+                error: 'nodes must be an array'
+            };
+        }
+        
+        return {
+            valid: true,
+            json: parsed
+        };
+        
+    } catch (error) {
+        return {
+            valid: false,
+            error: `JSON parse error: ${error.message}`
+        };
+    }
+}
+
+// Add download button for the generated workflow JSON
+function addDownloadButton(jsonWorkflow) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message assistant';
+    
+    const labelDiv = document.createElement('div');
+    labelDiv.className = 'message-label';
+    labelDiv.textContent = 'AI Assistant';
+    
+    const downloadContainer = document.createElement('div');
+    downloadContainer.className = 'build-it-container';
+    
+    const description = document.createElement('div');
+    description.className = 'build-it-description';
+    description.innerHTML = `📁 <strong>Your n8n workflow is ready!</strong><br>Click below to download the JSON file and import it into your n8n instance.`;
+    
+    const downloadBtn = document.createElement('button');
+    downloadBtn.className = 'build-it-btn';
+    downloadBtn.textContent = "Download Workflow JSON 📥";
+    downloadBtn.style.background = 'linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%)';
+    
+    // Add click event listener for download
+    downloadBtn.addEventListener('click', () => {
+        downloadWorkflowJSON(jsonWorkflow);
+    });
+    
+    downloadContainer.appendChild(description);
+    downloadContainer.appendChild(downloadBtn);
+    
+    messageDiv.appendChild(labelDiv);
+    messageDiv.appendChild(downloadContainer);
+    
+    chatMessages.appendChild(messageDiv);
+    
+    // Auto-scroll to show download button
+    setTimeout(() => {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }, 100);
+}
+
+// Download workflow JSON as file
+function downloadWorkflowJSON(jsonWorkflow) {
+    try {
+        // Create filename with timestamp
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/[:]/g, '-');
+        const filename = `n8n-workflow-${timestamp}.json`;
+        
+        // Convert to JSON string with proper formatting
+        const jsonString = JSON.stringify(jsonWorkflow, null, 2);
+        
+        // Create blob and download
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.style.display = 'none';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Clean up the URL object
+        URL.revokeObjectURL(url);
+        
+        // Show success message
+        addMessage('assistant', `✅ **Download successful!**\n\nYour workflow JSON has been downloaded as \`${filename}\`. You can now import this file into your n8n instance by going to: **Workflows → Import from File** and selecting the downloaded JSON file.`);
+        
+    } catch (error) {
+        console.error('Error downloading JSON:', error);
+        addMessage('assistant', `❌ **Download failed**\n\nThere was an error downloading the file: ${error.message}. Please try again.`);
+    }
 }
 
 // Get system prompt based on current stage
