@@ -2,6 +2,7 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
 
 // Load environment variables
 function loadEnv() {
@@ -23,6 +24,12 @@ function loadEnv() {
 const env = loadEnv();
 const PORT = process.env.PORT || 3001;
 
+// Initialize Supabase client
+const supabase = createClient(
+    env.SUPABASE_URL || process.env.SUPABASE_URL,
+    env.SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+);
+
 const server = http.createServer((req, res) => {
     // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -33,6 +40,12 @@ const server = http.createServer((req, res) => {
     if (req.method === 'OPTIONS') {
         res.writeHead(200);
         res.end();
+        return;
+    }
+
+    // Handle database API endpoints
+    if (req.url.startsWith('/api/db/') && req.method === 'POST') {
+        handleDatabaseAPI(req, res);
         return;
     }
 
@@ -165,7 +178,175 @@ const server = http.createServer((req, res) => {
     }
 });
 
+// Database API handler
+async function handleDatabaseAPI(req, res) {
+    let body = '';
+    req.on('data', chunk => {
+        body += chunk.toString();
+    });
+
+    req.on('end', async () => {
+        try {
+            const data = JSON.parse(body);
+            const endpoint = req.url.split('/api/db/')[1];
+            
+            console.log(`📊 Database API request: ${endpoint}`, {
+                dataKeys: Object.keys(data),
+                timestamp: new Date().toISOString()
+            });
+
+            let result;
+            switch (endpoint) {
+                case 'sessions':
+                    result = await createSession(data);
+                    break;
+                case 'initial-prompts':
+                    result = await createInitialPrompt(data);
+                    break;
+                case 'voice-inputs':
+                    result = await createVoiceInput(data);
+                    break;
+                case 'conversations':
+                    result = await createConversation(data);
+                    break;
+                case 'mermaid-diagrams':
+                    result = await createMermaidDiagram(data);
+                    break;
+                case 'user-actions':
+                    result = await createUserAction(data);
+                    break;
+                case 'get-session-history':
+                    result = await getSessionHistory(data.sessionId);
+                    break;
+                default:
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Endpoint not found' }));
+                    return;
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(result));
+        } catch (error) {
+            console.error('Database API error:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: error.message }));
+        }
+    });
+}
+
+// Database functions
+async function createSession(data) {
+    const { data: session, error } = await supabase
+        .from('sessions')
+        .insert({
+            user_agent: data.userAgent,
+            ip_address: data.ipAddress,
+            session_data: data.sessionData || {}
+        })
+        .select()
+        .single();
+    
+    if (error) throw error;
+    return { session };
+}
+
+async function createInitialPrompt(data) {
+    const { data: prompt, error } = await supabase
+        .from('initial_prompts')
+        .insert({
+            session_id: data.sessionId,
+            prompt_text: data.promptText,
+            input_method: data.inputMethod,
+            suggestion_button_clicked: data.suggestionButtonClicked
+        })
+        .select()
+        .single();
+    
+    if (error) throw error;
+    return { prompt };
+}
+
+async function createVoiceInput(data) {
+    const { data: voiceInput, error } = await supabase
+        .from('voice_inputs')
+        .insert({
+            session_id: data.sessionId,
+            transcribed_text: data.transcribedText,
+            confidence_score: data.confidenceScore,
+            language: data.language || 'en-US'
+        })
+        .select()
+        .single();
+    
+    if (error) throw error;
+    return { voiceInput };
+}
+
+async function createConversation(data) {
+    const { data: conversation, error } = await supabase
+        .from('conversations')
+        .insert({
+            session_id: data.sessionId,
+            message_role: data.messageRole,
+            message_content: data.messageContent,
+            message_order: data.messageOrder
+        })
+        .select()
+        .single();
+    
+    if (error) throw error;
+    return { conversation };
+}
+
+async function createMermaidDiagram(data) {
+    const { data: diagram, error } = await supabase
+        .from('mermaid_diagrams')
+        .insert({
+            conversation_id: data.conversationId,
+            session_id: data.sessionId,
+            diagram_code: data.diagramCode,
+            diagram_type: data.diagramType || 'flowchart',
+            render_status: data.renderStatus || 'pending',
+            error_message: data.errorMessage,
+            retry_count: data.retryCount || 0
+        })
+        .select()
+        .single();
+    
+    if (error) throw error;
+    return { diagram };
+}
+
+async function createUserAction(data) {
+    const { data: action, error } = await supabase
+        .from('user_actions')
+        .insert({
+            session_id: data.sessionId,
+            action_type: data.actionType,
+            action_value: data.actionValue,
+            element_id: data.elementId,
+            page_location: data.pageLocation || 'main'
+        })
+        .select()
+        .single();
+    
+    if (error) throw error;
+    return { action };
+}
+
+async function getSessionHistory(sessionId) {
+    const { data: conversations, error } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('message_order', { ascending: true });
+    
+    if (error) throw error;
+    return { conversations };
+}
+
 server.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
     console.log(`📡 Claude proxy available at: http://localhost:${PORT}/api/claude-proxy`);
+    console.log(`📊 Database API available at: http://localhost:${PORT}/api/db/*`);
 });

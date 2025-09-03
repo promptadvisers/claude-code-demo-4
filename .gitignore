@@ -29,3 +29,6 @@ Thumbs.db
 
 # Dependencies
 node_modules/
+
+# mcp
+.mcp.json

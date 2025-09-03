@@ -1,6 +1,13 @@
 // Configuration  
 const API_ENDPOINT = 'https://api.openai.com/v1/responses';
 const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
+const DATABASE_API_BASE = '/api/db';
+
+// Session and database management
+let currentSessionId = null;
+let messageOrder = 0;
+let conversationHistory = [];
+let lastSuggestionClicked = null;
 
 // Function to get API keys from configuration
 async function getApiKey(service) {
@@ -9,6 +16,148 @@ async function getApiKey(service) {
     } catch (error) {
         throw new Error(`API Configuration Error: ${error.message}`);
     }
+}
+
+// Database API functions
+async function callDatabaseAPI(endpoint, data) {
+    try {
+        const response = await fetch(`${DATABASE_API_BASE}/${endpoint}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Database API error: ${response.statusText}`);
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error(`Database API call failed for ${endpoint}:`, error);
+        // Don't throw error to prevent UI blocking
+        return null;
+    }
+}
+
+// Session management
+async function initializeSession() {
+    if (currentSessionId) return currentSessionId;
+    
+    try {
+        const result = await callDatabaseAPI('sessions', {
+            userAgent: navigator.userAgent,
+            ipAddress: null, // Will be handled server-side if needed
+            sessionData: {
+                startTime: new Date().toISOString(),
+                userAgent: navigator.userAgent
+            }
+        });
+        
+        currentSessionId = result.session.id;
+        console.log('✅ Session initialized:', currentSessionId);
+        return currentSessionId;
+    } catch (error) {
+        console.error('Failed to initialize session:', error);
+        // Generate a temporary session ID for offline functionality
+        currentSessionId = 'temp-' + Date.now();
+        return currentSessionId;
+    }
+}
+
+// Save initial prompt
+async function saveInitialPrompt(promptText, inputMethod = 'typed', suggestionClicked = null) {
+    await initializeSession();
+    
+    // Fire and forget - don't block UI
+    callDatabaseAPI('initial-prompts', {
+        sessionId: currentSessionId,
+        promptText: promptText,
+        inputMethod: inputMethod,
+        suggestionButtonClicked: suggestionClicked
+    }).then(() => {
+        console.log('📝 Initial prompt saved');
+    }).catch(error => {
+        console.error('Failed to save initial prompt:', error);
+    });
+}
+
+// Save voice input
+async function saveVoiceInput(transcribedText, confidence = null, language = 'en-US') {
+    await initializeSession();
+    
+    // Fire and forget - don't block UI
+    callDatabaseAPI('voice-inputs', {
+        sessionId: currentSessionId,
+        transcribedText: transcribedText,
+        confidenceScore: confidence,
+        language: language
+    }).then(() => {
+        console.log('🎤 Voice input saved');
+    }).catch(error => {
+        console.error('Failed to save voice input:', error);
+    });
+}
+
+// Save conversation message
+async function saveConversationMessage(role, content) {
+    await initializeSession();
+    messageOrder++;
+    
+    try {
+        const result = await callDatabaseAPI('conversations', {
+            sessionId: currentSessionId,
+            messageRole: role,
+            messageContent: content,
+            messageOrder: messageOrder
+        });
+        
+        conversationHistory.push(result.conversation);
+        console.log(`💬 ${role} message saved`);
+        return result.conversation.id;
+    } catch (error) {
+        console.error('Failed to save conversation message:', error);
+        return null;
+    }
+}
+
+// Save Mermaid diagram
+async function saveMermaidDiagram(diagramCode, conversationId = null, renderStatus = 'pending', errorMessage = null, retryCount = 0) {
+    await initializeSession();
+    
+    try {
+        await callDatabaseAPI('mermaid-diagrams', {
+            conversationId: conversationId,
+            sessionId: currentSessionId,
+            diagramCode: diagramCode,
+            diagramType: 'flowchart',
+            renderStatus: renderStatus,
+            errorMessage: errorMessage,
+            retryCount: retryCount
+        });
+        console.log('📊 Mermaid diagram saved');
+    } catch (error) {
+        console.error('Failed to save Mermaid diagram:', error);
+    }
+}
+
+// Save user action
+function saveUserAction(actionType, actionValue = null, elementId = null, pageLocation = 'main') {
+    // Fire and forget - don't block UI
+    initializeSession().then(() => {
+        callDatabaseAPI('user-actions', {
+            sessionId: currentSessionId,
+            actionType: actionType,
+            actionValue: actionValue,
+            elementId: elementId,
+            pageLocation: pageLocation
+        }).then(() => {
+            console.log('👆 User action saved:', actionType);
+        }).catch(error => {
+            console.error('Failed to save user action:', error);
+        });
+    });
 }
 
 // Initialize Mermaid with error suppression
@@ -86,8 +235,8 @@ const loadingMessages = [
     "Putting the pieces together... 🧩"
 ];
 
-// Application state
-let conversationHistory = [];
+// Application state (conversationHistory already declared above)
+// let conversationHistory = []; // Already declared at line 9
 let currentStage = 'initial';
 let clarificationCount = 0;
 let diagramCount = 0;
@@ -102,45 +251,12 @@ let initialInputContent = "";
 // Explanation state
 let explanationShownForSession = false;
 
-// DOM Elements
-const container = document.querySelector('.container');
-const inputSection = document.getElementById('inputSection') || document.querySelector('.input-section');
-const chatInterface = document.getElementById('chatInterface');
-const userInput = document.getElementById('userInput');
-const submitBtn = document.getElementById('submitBtn');
-const voiceBtn = document.getElementById('voiceBtn');
-const chatMessages = document.getElementById('chatMessages');
-const chatInput = document.getElementById('chatInput');
-const chatVoiceBtn = document.getElementById('chatVoiceBtn');
-const sendBtn = document.getElementById('sendBtn');
-const backBtn = document.getElementById('backBtn');
-const loadingOverlay = document.getElementById('loadingOverlay');
-const loadingText = document.getElementById('loadingText');
-const suggestionBtns = document.querySelectorAll('.suggestion-btn');
-const diagramModal = document.getElementById('diagramModal');
-const modalClose = document.getElementById('modalClose');
-const modalBody = document.getElementById('modalBody');
-const downloadPng = document.getElementById('downloadPng');
-const downloadSvg = document.getElementById('downloadSvg');
+// DOM Elements - will be initialized on DOMContentLoaded
+let container, inputSection, chatInterface, userInput, submitBtn, voiceBtn;
+let chatMessages, chatInput, chatVoiceBtn, sendBtn, backBtn, loadingOverlay, loadingText;
+let suggestionBtns, diagramModal, modalClose, modalBody, downloadPng, downloadSvg;
 
-// Event Listeners
-submitBtn.addEventListener('click', handleInitialSubmit);
-voiceBtn.addEventListener('click', () => handleVoiceInput(userInput, handleInitialSubmit));
-userInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleInitialSubmit();
-    }
-});
-
-sendBtn.addEventListener('click', handleChatSubmit);
-chatVoiceBtn.addEventListener('click', () => handleVoiceInput(chatInput, handleChatSubmit));
-chatInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleChatSubmit();
-    }
-});
+// Event listeners will be set up in DOMContentLoaded
 
 // Global ESC key listener to stop voice recording
 document.addEventListener('keydown', (e) => {
@@ -174,46 +290,37 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-backBtn.addEventListener('click', () => {
-    // Go back to initial screen
-    chatInterface.style.display = 'none';
-    inputSection.style.display = 'block';
-    document.querySelector('.main-title').style.display = 'block';
-    // Clear conversation
-    conversationHistory = [];
-    currentStage = 'initial';
-    clarificationCount = 0;
-    diagramCount = 0;
-    explanationShownForSession = false; // Reset explanation state
-    chatMessages.innerHTML = '';
-    userInput.value = '';
-});
+// backBtn event listener moved to DOMContentLoaded
 
-suggestionBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-        userInput.value = btn.dataset.suggestion;
-        handleInitialSubmit();
-    });
-});
+// suggestionBtns event listeners moved to DOMContentLoaded
 
-// Modal event listeners
-modalClose.addEventListener('click', () => {
-    diagramModal.classList.remove('active');
-});
+// Modal event listeners moved to DOMContentLoaded
 
-window.addEventListener('click', (e) => {
-    if (e.target === diagramModal) {
-        diagramModal.classList.remove('active');
-    }
-});
+// Window click event listener moved to DOMContentLoaded
 
-downloadPng.addEventListener('click', downloadDiagramAsPng);
-downloadSvg.addEventListener('click', downloadDiagramAsSvg);
+// Download button event listeners moved to DOMContentLoaded
 
 // Handle initial form submission
-function handleInitialSubmit() {
+async function handleInitialSubmit() {
     const input = userInput.value.trim();
     if (!input) return;
+    
+    // Determine input method
+    let inputMethod = 'typed';
+    if (lastSuggestionClicked) {
+        inputMethod = 'suggestion';
+    } else if (recognition || isRecording) {
+        inputMethod = 'voice';
+    }
+    
+    // Save the initial prompt to database (non-blocking)
+    saveInitialPrompt(input, inputMethod, lastSuggestionClicked);
+    
+    // Reset suggestion tracking
+    lastSuggestionClicked = null;
+    
+    // Save user action (non-blocking)
+    saveUserAction('initial_submit', input, 'userInput', 'main');
     
     // Switch to chat interface
     inputSection.style.display = 'none';
@@ -221,7 +328,7 @@ function handleInitialSubmit() {
     chatInterface.style.display = 'flex';
     
     // Add user message to chat
-    addMessage('user', input);
+    await addMessage('user', input);
     
     // Clear input
     userInput.value = '';
@@ -231,12 +338,12 @@ function handleInitialSubmit() {
 }
 
 // Handle chat submission
-function handleChatSubmit() {
+async function handleChatSubmit() {
     const input = chatInput.value.trim();
     if (!input) return;
     
     // Add user message to chat
-    addMessage('user', input);
+    await addMessage('user', input);
     
     // Clear input
     chatInput.value = '';
@@ -250,7 +357,7 @@ let diagramRetryCount = 0;
 const MAX_DIAGRAM_RETRIES = 3;
 
 // Add message to chat with markdown support
-function addMessage(role, content, isDiagram = false, messageId = null) {
+async function addMessage(role, content, isDiagram = false, messageId = null) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
     if (messageId) messageDiv.id = messageId;
@@ -276,12 +383,20 @@ function addMessage(role, content, isDiagram = false, messageId = null) {
         `;
         
         // Try to render the diagram with error handling
-        renderMermaidDiagram(content, containerDiv).then((renderResult) => {
+        renderMermaidDiagram(content, containerDiv).then(async (renderResult) => {
+            const conversationId = messageDiv.getAttribute('data-conversation-id');
+            
             if (renderResult.success) {
                 containerDiv.title = 'Click to view full diagram';
                 // Make it clickable only if successful
                 containerDiv.addEventListener('click', () => openDiagramModal(content));
+                
+                // Save successful diagram to database
+                await saveMermaidDiagram(content, conversationId, 'success');
             } else {
+                // Save failed diagram to database
+                await saveMermaidDiagram(content, conversationId, 'error', renderResult.error);
+                
                 // Transition to auto-healing state with clear feedback
                 console.log('🔧 Diagram rendering failed, starting auto-heal:', renderResult.error);
                 
@@ -332,6 +447,12 @@ function addMessage(role, content, isDiagram = false, messageId = null) {
     setTimeout(() => {
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }, 100);
+    
+    // Save message to database
+    const conversationId = await saveConversationMessage(role, content);
+    if (conversationId && messageId) {
+        messageDiv.setAttribute('data-conversation-id', conversationId);
+    }
     
     return messageDiv;
 }
@@ -491,11 +612,15 @@ Return ONLY the fixed Mermaid code without any explanation or markdown fences.`;
             containerDiv.innerHTML = '';
             containerDiv.classList.remove('error-state');
             
-            renderMermaidDiagram(fixedDiagram, containerDiv).then((renderResult) => {
+            renderMermaidDiagram(fixedDiagram, containerDiv).then(async (renderResult) => {
                 if (renderResult.success) {
                     // Success! Make it clickable
                     containerDiv.title = 'Click to view full diagram';
                     containerDiv.addEventListener('click', () => openDiagramModal(fixedDiagram));
+                    
+                    // Save fixed diagram to database
+                    await saveMermaidDiagram(fixedDiagram, null, 'success', null, diagramRetryCount);
+                    
                     diagramRetryCount = 0; // Reset counter
                     
                     console.log('✅ Mermaid diagram auto-healing succeeded on attempt:', diagramRetryCount);
@@ -505,6 +630,10 @@ Return ONLY the fixed Mermaid code without any explanation or markdown fences.`;
                 } else {
                     // Still broken, try again or show final error
                     console.log('❌ Mermaid diagram auto-healing failed, trying again:', renderResult.error);
+                    
+                    // Save retry attempt to database
+                    await saveMermaidDiagram(fixedDiagram, null, 'retrying', renderResult.error, diagramRetryCount);
+                    
                     handleDiagramError(fixedDiagram, containerDiv, renderResult.error);
                 }
             });
@@ -1281,15 +1410,20 @@ function handleVoiceInput(inputElement, submitHandler) {
     };
     
     // REAL-TIME TRANSCRIPTION HANDLER - This is the key part!
-    recognitionInstance.onresult = (event) => {
+    recognitionInstance.onresult = async (event) => {
         let finalTranscript = '';
         let interimTranscript = '';
         
         // Process ALL results to build complete transcript
         for (let i = 0; i < event.results.length; i++) {
             const transcript = event.results[i][0].transcript;
+            const confidence = event.results[i][0].confidence;
+            
             if (event.results[i].isFinal) {
                 finalTranscript += transcript + ' ';
+                
+                // Save final voice input to database
+                await saveVoiceInput(transcript, confidence, recognitionInstance.lang);
             } else {
                 interimTranscript += transcript;
             }
@@ -1465,12 +1599,138 @@ ${designPrinciples}`;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize DOM elements
+    container = document.querySelector('.container');
+    inputSection = document.getElementById('inputSection') || document.querySelector('.input-section');
+    chatInterface = document.getElementById('chatInterface');
+    userInput = document.getElementById('userInput');
+    submitBtn = document.getElementById('submitBtn');
+    voiceBtn = document.getElementById('voiceBtn');
+    chatMessages = document.getElementById('chatMessages');
+    chatInput = document.getElementById('chatInput');
+    chatVoiceBtn = document.getElementById('chatVoiceBtn');
+    sendBtn = document.getElementById('sendBtn');
+    backBtn = document.getElementById('backBtn');
+    loadingOverlay = document.getElementById('loadingOverlay');
+    loadingText = document.getElementById('loadingText');
+    suggestionBtns = document.querySelectorAll('.suggestion-btn');
+    diagramModal = document.getElementById('diagramModal');
+    modalClose = document.getElementById('modalClose');
+    modalBody = document.getElementById('modalBody');
+    downloadPng = document.getElementById('downloadPng');
+    downloadSvg = document.getElementById('downloadSvg');
+    
+    // Set up event listeners
+    if (submitBtn) {
+        submitBtn.addEventListener('click', handleInitialSubmit);
+    }
+    if (voiceBtn) {
+        voiceBtn.addEventListener('click', () => handleVoiceInput(userInput, handleInitialSubmit));
+    }
+    if (userInput) {
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleInitialSubmit();
+            }
+        });
+    }
+    
+    if (sendBtn) {
+        sendBtn.addEventListener('click', handleChatSubmit);
+    }
+    if (chatVoiceBtn) {
+        chatVoiceBtn.addEventListener('click', () => handleVoiceInput(chatInput, handleChatSubmit));
+    }
+    if (chatInput) {
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleChatSubmit();
+            }
+        });
+    }
+    
+    if (backBtn) {
+        backBtn.addEventListener('click', () => {
+            // Save user action
+            saveUserAction('back_to_main', null, 'backBtn', 'chat');
+            
+            // Go back to initial screen
+            chatInterface.style.display = 'none';
+            inputSection.style.display = 'block';
+            document.querySelector('.main-title').style.display = 'block';
+            // Clear conversation
+            conversationHistory = [];
+            currentStage = 'initial';
+            clarificationCount = 0;
+            diagramCount = 0;
+            chatMessages.innerHTML = '';
+            userInput.value = '';
+        });
+    }
+    
+    if (suggestionBtns) {
+        suggestionBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const suggestionText = btn.dataset.suggestion;
+                lastSuggestionClicked = suggestionText;
+                userInput.value = suggestionText;
+                
+                // Save user action for suggestion click (non-blocking)
+                saveUserAction('suggestion_click', suggestionText, btn.id || 'suggestion-btn', 'main');
+                
+                handleInitialSubmit();
+            });
+        });
+    }
+    
+    // Modal event listeners
+    if (modalClose) {
+        modalClose.addEventListener('click', () => {
+            saveUserAction('modal_close', null, 'modalClose', 'chat');
+            diagramModal.classList.remove('active');
+        });
+    }
+    
+    if (downloadPng) {
+        downloadPng.addEventListener('click', () => {
+            saveUserAction('download_png', null, 'downloadPng', 'chat');
+            downloadDiagramAsPng();
+        });
+    }
+    
+    if (downloadSvg) {
+        downloadSvg.addEventListener('click', () => {
+            saveUserAction('download_svg', null, 'downloadSvg', 'chat');
+            downloadDiagramAsSvg();
+        });
+    }
+    
+    // Global window click handler for modal
+    window.addEventListener('click', (e) => {
+        if (diagramModal && e.target === diagramModal) {
+            saveUserAction('modal_close_outside', null, 'diagramModal', 'chat');
+            diagramModal.classList.remove('active');
+        }
+    });
+    
+    // Initialize database session (non-blocking)
+    initializeSession().then(() => {
+        // Save page load action
+        saveUserAction('page_load', window.location.href, null, 'main');
+    });
+    
     // Focus on input
-    userInput.focus();
+    if (userInput) {
+        userInput.focus();
+    }
     
     // Set up marked options for better formatting
-    marked.setOptions({
-        breaks: true,
-        gfm: true
-    });
+    if (typeof marked !== 'undefined') {
+        marked.setOptions({
+            breaks: true,
+            gfm: true
+        });
+    }
 });

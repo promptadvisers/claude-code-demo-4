@@ -1,0 +1,15 @@
+{
+  "name": "workflow-planner",
+  "version": "1.0.0",
+  "description": "An interactive web application that helps users plan and design automation workflows using AI-powered conversation and visual Mermaid diagrams.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.0"
+  }
+}
